@@ -208,7 +208,7 @@ class LoginResource(ResourceBase):
                 g.user = user.as_dict()
                 g.current_token = user.generate_auth_token()
                 return {'logged': True}, 200
-        except Exception:
+        except Exception as ex:
             return {'result': 'Not Authorized'}, 401
         return {'result': 'Not Authorized'}, 401
 

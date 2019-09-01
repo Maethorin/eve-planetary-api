@@ -129,6 +129,10 @@ class User(Entity):
         return self.instance.email
 
     @property
+    def confirmed(self):
+        return self.instance.confirmed
+
+    @property
     def is_admin(self):
         return self.instance.is_admin
 
@@ -168,6 +172,8 @@ class User(Entity):
         return jwt.encode({'id': self.id, 'email': self.email, 'exp': datetime.utcnow() + timedelta(minutes=expiration)}, config.SECRET_KEY, algorithm='HS256')
 
     def get_item(self, **kwargs):
+        if not self.is_admin:
+            raise exceptions.WhoDaHellYouThinkYouAre('Not now!')
         if self.entity_key == 'raw_resource':
             return self.__get_raw_resource(kwargs['raw_resource_id'])
         if self.entity_key == 'processed_material':
@@ -181,6 +187,8 @@ class User(Entity):
         return None
 
     def get_list(self, payload, **kwargs):
+        if not self.is_admin:
+            raise exceptions.WhoDaHellYouThinkYouAre('Not now!')
         if self.entity_key == 'raw_resource':
             return self.__get_raw_resources_list()
         if self.entity_key == 'processed_material':
@@ -192,6 +200,8 @@ class User(Entity):
         return []
 
     def create_new_entity(self, dict_data):
+        if not self.is_admin:
+            raise exceptions.WhoDaHellYouThinkYouAre('Not now!')
         if self.entity_key == 'raw_resource':
             return self.__create_raw_resource(dict_data)
         if self.entity_key == 'processed_material':

@@ -1,0 +1,16 @@
+Flask-RESTful
+Flask-SQLAlchemy
+Flask-Script
+Flask-Migrate
+alembic
+
+psycopg2
+sqlalchemy-utils
+
+passlib
+PyJWT
+
+requests
+python-dotenv
+gunicorn
+gevent

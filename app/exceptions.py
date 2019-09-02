@@ -39,3 +39,7 @@ class PasswordRequired(Exception):
 
 class ColonyProcessedMaterialNotFound(Exception):
     pass
+
+
+class ColonyRawResourceNotFound(Exception):
+    pass

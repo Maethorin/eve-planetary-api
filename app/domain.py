@@ -544,6 +544,12 @@ class Colony(Entity):
                 return colony_processed_material
         raise exceptions.ColonyProcessedMaterialNotFound('Check your data for invalid input')
 
+    def select_processed_material_resource(self, colony_processed_material):
+        for colony_raw_resource in self.raw_resources:
+            if colony_processed_material.processed_material.input.id == colony_raw_resource.raw_resource.id:
+                return colony_raw_resource
+        raise exceptions.ColonyRawResourceNotFound('Check your data for invalid input')
+
     def __total_processed_materials_in_colony(self):
         result = []
         for colony_raw_resource in self.raw_resources:
@@ -576,12 +582,39 @@ class Colony(Entity):
         for colony_raw_resource in self.raw_resources:
             colony_processed_material = self.select_raw_resource_material(colony_raw_resource)
             raw_resource_dict = {
-                'raw_resource': {'name': colony_raw_resource.raw_resource.name, 'quantity': colony_raw_resource.quantity},
-                'processed_material': {'name': colony_processed_material.processed_material.name, 'quantity': colony_processed_material.quantity},
+                'raw_resource': {'id': colony_raw_resource.raw_resource.id, 'name': colony_raw_resource.raw_resource.name, 'quantity': colony_raw_resource.quantity},
+                'processed_material': {'id': colony_processed_material.processed_material.id, 'name': colony_processed_material.processed_material.name, 'quantity': colony_processed_material.quantity},
                 'extraction_needed': self.calculate_raw_resource(colony_raw_resource, colony_processed_material, production_target)
             }
             self.__calcule_result['calcule_result'].append(raw_resource_dict)
         return self
+
+    def list_processed_materials(self):
+        result = []
+        for colony_processed_material in self.processed_materials:
+            colony_raw_processed = self.select_processed_material_resource(colony_processed_material)
+            result.append({
+                'processed_material_id': colony_processed_material.processed_material.id,
+                'name': colony_processed_material.processed_material.name,
+                'quantity': colony_processed_material.quantity,
+                'raw_resource': {
+                    'raw_resource_id': colony_raw_processed.raw_resource.id,
+                    'name': colony_raw_processed.raw_resource.name,
+                    'quantity': colony_raw_processed.quantity,
+                }
+            })
+        return result
+
+    def list_refined_commodity(self):
+        result = []
+        for colony_refined_commodity in self.refined_commodities:
+            result.append({
+                'refined_commodity_id': colony_refined_commodity.refined_commodity.id,
+                'name': colony_refined_commodity.refined_commodity.name,
+                'quantity': colony_refined_commodity.quantity,
+                'processed_materials': self.list_processed_materials()
+            })
+        return result
 
     def as_dict(self, compact=False):
         as_dict = {
@@ -592,13 +625,12 @@ class Colony(Entity):
         }
         if compact:
             return as_dict
+
         if self.__calcule_result is not None:
             as_dict.update(self.__calcule_result)
             return as_dict
 
         as_dict.update({
-            'raw_resources': [raw_resource.as_dict(compact) for raw_resource in self.raw_resources],
-            'processed_materials': [processed_material.as_dict(compact) for processed_material in self.processed_materials],
-            'refined_commodities': [refined_commodity.as_dict(compact) for refined_commodity in self.refined_commodities]
+            'refined_commodities': self.list_refined_commodity()
         })
         return as_dict

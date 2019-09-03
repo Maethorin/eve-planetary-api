@@ -13,5 +13,3 @@ INSERT INTO public.raw_resources (name) VALUES ('Non-CS Crystals');
 INSERT INTO public.raw_resources (name) VALUES ('Planktic Colonies');
 INSERT INTO public.raw_resources (name) VALUES ('Reactive Gas');
 INSERT INTO public.raw_resources (name) VALUES ('Suspended Plasma');
-
-alter sequence raw_resources_id_seq restart with 15;

@@ -13,5 +13,3 @@ INSERT INTO public.processed_materials (name, input_id, input_quantity, output_q
 INSERT INTO public.processed_materials (name, input_id, input_quantity, output_quantity) VALUES ('Silicon', 6, 3000, 20);
 INSERT INTO public.processed_materials (name, input_id, input_quantity, output_quantity) VALUES ('Toxic Metals', 7, 3000, 20);
 INSERT INTO public.processed_materials (name, input_id, input_quantity, output_quantity) VALUES ('Water', 1, 3000, 20);
-
-alter sequence processed_materials_id_seq restart with 15;

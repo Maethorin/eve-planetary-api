@@ -22,5 +22,3 @@ INSERT INTO public.refined_commodities (name, first_input_id, second_input_id) V
 INSERT INTO public.refined_commodities (name, first_input_id, second_input_id) VALUES ('Transmitter', 4, 9);
 INSERT INTO public.refined_commodities (name, first_input_id, second_input_id) VALUES ('Viral Agent', 3, 1);
 INSERT INTO public.refined_commodities (name, first_input_id, second_input_id) VALUES ('Water-Cooled CPU', 15, 12);
-
-alter sequence refined_commodities_id_seq restart with 24;

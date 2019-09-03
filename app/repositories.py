@@ -90,9 +90,31 @@ class User(db.Model, AbstractModel):
         return cls.get_with_filter(email=email)
 
 
+class Account(db.Model, AbstractModel):
+    __tablename__ = 'accounts'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    user = db.relationship("User", backref=backref("accounts"))
+    username = db.Column(db.String, unique=True, nullable=False)
+    access_token = db.Column(db.String)
+    refresh_token = db.Column(db.String)
+    access_token_expires = db.Column(db.DateTime)
+
+
+class Character(db.Model, AbstractModel):
+    __tablename__ = 'characters'
+    id = db.Column(db.Integer, primary_key=True)
+    character_id = db.Column(db.BigInteger)
+    account_id = db.Column(db.Integer, db.ForeignKey('accounts.id'), nullable=False)
+    account = db.relationship("Account", backref=backref("characters"))
+    name = db.Column(db.String, nullable=False)
+    owner_hash = db.Column(db.String)
+
+
 class RawResource(db.Model, AbstractModel):
     __tablename__ = 'raw_resources'
     id = db.Column(db.Integer, primary_key=True)
+    type_id = db.Column(db.Integer)
     name = db.Column(db.String, unique=True, nullable=False)
     colonies = db.relationship("ColonyRawResource", back_populates='raw_resource')
 
@@ -100,6 +122,7 @@ class RawResource(db.Model, AbstractModel):
 class ProcessedMaterial(db.Model, AbstractModel):
     __tablename__ = 'processed_materials'
     id = db.Column(db.Integer, primary_key=True)
+    type_id = db.Column(db.Integer)
     name = db.Column(db.String, unique=True, nullable=False)
     input_id = db.Column(db.Integer, db.ForeignKey('raw_resources.id'), nullable=False)
     input = db.relationship("RawResource", backref=backref("processed_material", uselist=False), lazy='joined')
@@ -111,6 +134,7 @@ class ProcessedMaterial(db.Model, AbstractModel):
 class RefinedCommodity(db.Model, AbstractModel):
     __tablename__ = 'refined_commodities'
     id = db.Column(db.Integer, primary_key=True)
+    type_id = db.Column(db.Integer)
     name = db.Column(db.String, unique=True, nullable=False)
     first_input_id = db.Column(db.Integer, db.ForeignKey('processed_materials.id'), nullable=False)
     first_input = db.relationship("ProcessedMaterial", foreign_keys=[first_input_id], backref=backref("first_refined_commodity", uselist=False), lazy='joined')
@@ -125,9 +149,17 @@ class RefinedCommodity(db.Model, AbstractModel):
 class Colony(db.Model, AbstractModel):
     __tablename__ = 'colonies'
     id = db.Column(db.Integer, primary_key=True)
+    system_id = db.Column(db.Integer, nullable=False)
     system_name = db.Column(db.String, nullable=False)
     planet_name = db.Column(db.String, nullable=False)
-    player_name = db.Column(db.String, nullable=False)
+
+    planet_id = db.Column(db.Integer, nullable=False)
+    planet_type = db.Column(db.String, nullable=False)
+    planet_type_id = db.Column(db.Integer, nullable=False)
+
+    character_id = db.Column(db.Integer, db.ForeignKey('characters.id'), nullable=False)
+    character = db.relationship("Character", backref=backref("colonies"))
+
     raw_resources = db.relationship("ColonyRawResource", back_populates='colony')
     processed_materials = db.relationship("ColonyProcessedMaterial", back_populates='colony')
     refined_commodities = db.relationship("ColonyRefinedCommodity", back_populates='colony')

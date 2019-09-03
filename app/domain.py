@@ -414,59 +414,30 @@ class Character(Entity):
 
     def create_colonies_from_eve(self):
         aura = eve.Aura.create_with_character(self)
-        character_planets = {{'upgrade_level': 4, 'num_pins': 7, 'solar_system_id': 30005308, 'owner_id': 90832503, 'last_update': '2019-09-02T09:46:20Z', 'planet_type': 'oceanic', 'planet_id': 40335748}}
-        # for character_planet in aura.get_character_planets():
-        for character_planet in character_planets:
-            # solar_system = aura.get_solar_system(character_planet['solar_system_id'])
-            solar_system = {'system_id': 30005308, 'system_name': 'Jufvitte'}
-            # planet = aura.get_planet(character_planet['planet_id'])
-            planet = {'planet_name': 'Jufvitte IX', 'planet_id': 40335748, 'planet_type_id': 2014}
-            # colony_data = aura.get_colony(character_planet['planet_id'])
-
+        for character_planet in aura.get_character_planets():
+            solar_system = aura.get_solar_system(character_planet['solar_system_id'])
+            planet = aura.get_planet(character_planet['planet_id'])
             colony_data = {
-                'pins': [
-                    {'latitude': 0.698319551306, 'contents': [{'amount': 4005, 'type_id': 2319}], 'longitude': 5.14793946887, 'pin_id': 1031275339546, 'type_id': 2542},
-                    {'latitude': 0.713551961614, 'longitude': 5.02560058358, 'pin_id': 1027825608864, 'type_id': 2525},
-                    {
-                        'extractor_details': {
-                            'product_type_id': 2268,
-                            'cycle_time': 1800,
-                            'heads': [
-                                {'latitude': 0.872196928005, 'longitude': 5.19956185029, 'head_id': 0},
-                                {'latitude': 0.870772395826, 'longitude': 5.16207878149, 'head_id': 1},
-                                {'latitude': 0.678887742845, 'longitude': 5.25793378853, 'head_id': 2},
-                                {'latitude': 0.831544067174, 'longitude': 5.19451271739, 'head_id': 3},
-                                {'latitude': 0.842302098815, 'longitude': 5.15228835616, 'head_id': 4},
-                                {'latitude': 0.808919036053, 'longitude': 5.15911908006, 'head_id': 5},
-                                {'latitude': 0.657428541077, 'longitude': 5.29748646519, 'head_id': 6},
-                                {'latitude': 0.7065854645, 'longitude': 5.22873677112, 'head_id': 7},
-                                {'latitude': 0.775435544216, 'longitude': 5.16910258904, 'head_id': 8},
-                                {'latitude': 0.745321706019, 'longitude': 5.18526295195, 'head_id': 9}
-                            ],
-                            'qty_per_cycle': 5200,
-                            'head_radius': 0.0136296823621
-                        }, 'latitude': 0.894761096558,
-                        'pin_id': 1027959862978,
-                        'expiry_time': '2019-09-03T16:46:20Z',
-                        'last_cycle_start': '2019-09-02T09:46:20Z',
-                        'longitude': 5.52693211772,
-                        'install_time': '2019-09-02T09:46:20Z',
-                        'type_id': 3063
-                    },
-                    {'latitude': 0.712387405109, 'contents': [{'amount': 305310, 'type_id': 2073}, {'amount': 349572, 'type_id': 2268}, {'amount': 1127, 'type_id': 2393}, {'amount': 405, 'type_id': 2319}], 'pin_id': 1027825706917, 'last_cycle_start': '2019-08-30T04:56:34Z', 'longitude': 5.15126936226, 'type_id': 2535},
-                    {'latitude': 0.712935975025, 'contents': [{'amount': 3000, 'type_id': 2073}], 'pin_id': 1027825706918, 'type_id': 2490, 'last_cycle_start': '2019-09-02T09:39:33Z', 'longitude': 5.13290451836, 'schematic_id': 131},
-                    {'latitude': 0.712018078817, 'contents': [{'amount': 3000, 'type_id': 2268}], 'pin_id': 1027825706919, 'type_id': 2490, 'last_cycle_start': '2019-09-02T09:19:37Z', 'longitude': 5.16993681213, 'schematic_id': 121},
-                    {'latitude': 0.724671672065, 'contents': [{'amount': 40, 'type_id': 2393}, {'amount': 20, 'type_id': 3645}], 'pin_id': 1027825706922, 'type_id': 2485, 'last_cycle_start': '2019-09-02T08:49:37Z', 'longitude': 5.15147699191, 'schematic_id': 86}
-                ]
-            }
-
-            colony_data.update({
                 'character_id': self.id,
                 'planet_type': character_planet['planet_type']
-            })
+            }
             colony_data.update(planet)
             colony_data.update(solar_system)
-            Colony.create_new(colony_data)
+            colony = Colony.get_or_create_new(colony_data)
+            eve_colony_data = aura.get_colony(character_planet['planet_id'])
+            planetary_data = {'schematics': [], 'storages': {}}
+            for pin in eve_colony_data['pins']:
+                if 'extractor_details' in pin:
+                    continue
+                if 'schematic_id' in pin:
+                    planetary_data['schematics'].append({'contents': pin['contents'], 'type_id': pin['type_id'], 'schematic_id': pin['schematic_id']})
+                    continue
+                if 'contents' in pin:
+                    for content in pin['contents']:
+                        if content['type_id'] not in planetary_data['storages']:
+                            planetary_data['storages'][content['type_id']] = 0
+                        planetary_data['storages'][content['type_id']] += content['amount']
+            colony.add_planetary_data(planetary_data)
 
     def as_dict(self, compact=False):
         as_dict = super(Character, self).as_dict(compact)
@@ -485,6 +456,20 @@ class Character(Entity):
 class RawResource(Entity):
     repository = repositories.RawResource
 
+    @classmethod
+    def create_with_type_id(cls, type_id):
+        instance = cls.repository.get_with_filter(type_id=type_id)
+        if instance is None:
+            return None
+        return cls.create_with_instance(instance)
+
+    @classmethod
+    def create_with_name(cls, name):
+        instance = cls.repository.get_with_filter(name=name)
+        if instance is None:
+            return None
+        return cls.create_with_instance(instance)
+
     def __init__(self, instance):
         super(RawResource, self).__init__(instance)
         self.__processed_material = None
@@ -496,6 +481,10 @@ class RawResource(Entity):
     @property
     def name(self):
         return self.instance.name
+
+    @property
+    def type_id(self):
+        return self.instance.type_id
 
     @property
     def processed_material(self):
@@ -524,6 +513,20 @@ class RawResource(Entity):
 class ProcessedMaterial(Entity):
     repository = repositories.ProcessedMaterial
 
+    @classmethod
+    def create_with_type_id(cls, type_id):
+        instance = cls.repository.get_with_filter(type_id=type_id)
+        if instance is None:
+            return None
+        return cls.create_with_instance(instance)
+
+    @classmethod
+    def create_with_name(cls, name):
+        instance = cls.repository.get_with_filter(name=name)
+        if instance is None:
+            return None
+        return cls.create_with_instance(instance)
+
     def __init__(self, instance):
         super(ProcessedMaterial, self).__init__(instance)
         self.__input = None
@@ -535,6 +538,10 @@ class ProcessedMaterial(Entity):
     @property
     def name(self):
         return self.instance.name
+
+    @property
+    def type_id(self):
+        return self.instance.type_id
 
     @property
     def input_id(self):
@@ -573,6 +580,20 @@ class ProcessedMaterial(Entity):
 class RefinedCommodity(Entity):
     repository = repositories.RefinedCommodity
 
+    @classmethod
+    def create_with_type_id(cls, type_id):
+        instance = cls.repository.get_with_filter(type_id=type_id)
+        if instance is None:
+            return None
+        return cls.create_with_instance(instance)
+
+    @classmethod
+    def create_with_name(cls, name):
+        instance = cls.repository.get_with_filter(name=name)
+        if instance is None:
+            return None
+        return cls.create_with_instance(instance)
+
     def __init__(self, instance):
         super(RefinedCommodity, self).__init__(instance)
         self.__first_input = None
@@ -585,6 +606,10 @@ class RefinedCommodity(Entity):
     @property
     def name(self):
         return self.instance.name
+
+    @property
+    def type_id(self):
+        return self.instance.type_id
 
     @property
     def first_input(self):
@@ -631,6 +656,14 @@ class RefinedCommodity(Entity):
 class ColonyRawResource(Entity):
     repository = repositories.ColonyRawResource
 
+    @classmethod
+    def create_or_update(cls, dict_data):
+        instance = cls.repository.get_with_filter(colony_id=dict_data['colony_id'], raw_resource_id=dict_data['raw_resource_id'])
+        if instance is not None:
+            instance.update_from_json({'quantity': dict_data['quantity']})
+            return cls.create_with_instance(instance)
+        return cls(cls.create_new(dict_data))
+
     def __init__(self, instance):
         super(ColonyRawResource, self).__init__(instance)
         self.__raw_resource = None
@@ -663,6 +696,14 @@ class ColonyRawResource(Entity):
 class ColonyProcessedMaterial(Entity):
     repository = repositories.ColonyProcessedMaterial
 
+    @classmethod
+    def create_or_update(cls, dict_data):
+        instance = cls.repository.get_with_filter(colony_id=dict_data['colony_id'], processed_material_id=dict_data['processed_material_id'])
+        if instance is not None:
+            instance.update_from_json({'quantity': dict_data['quantity']})
+            return cls.create_with_instance(instance)
+        return cls(cls.create_new(dict_data))
+
     def __init__(self, instance):
         super(ColonyProcessedMaterial, self).__init__(instance)
         self.__processed_material = None
@@ -694,6 +735,14 @@ class ColonyProcessedMaterial(Entity):
 
 class ColonyRefinedCommodity(Entity):
     repository = repositories.ColonyRefinedCommodity
+
+    @classmethod
+    def create_or_update(cls, dict_data):
+        instance = cls.repository.get_with_filter(colony_id=dict_data['colony_id'], refined_commodity_id=dict_data['refined_commodity_id'])
+        if instance is not None:
+            instance.update_from_json({'quantity': dict_data['quantity']})
+            return cls.create_with_instance(instance)
+        return cls(cls.create_new(dict_data))
 
     def __init__(self, instance):
         super(ColonyRefinedCommodity, self).__init__(instance)
@@ -734,6 +783,13 @@ class Colony(Entity):
     @classmethod
     def list_for_system_planet(cls, system_name, planet_name):
         return [cls(instance) for instance in cls.repository.find_for_system_planet(system_name, planet_name)]
+
+    @classmethod
+    def get_or_create_new(cls, dict_data):
+        instance = cls.repository.get_with_filter(character_id=dict_data['character_id'], planet_id=dict_data['planet_id'])
+        if instance is None:
+            return cls.create_new(dict_data)
+        return cls.create_with_instance(instance)
 
     @classmethod
     def create_with_character(cls, instance, character):
@@ -785,6 +841,52 @@ class Colony(Entity):
         if self.__refined_commodities is None:
             return [ColonyRefinedCommodity.create_with_instance(db_refined_commodities) for db_refined_commodities in self.instance.refined_commodities]
         return self.__refined_commodities
+
+    def add_planetary_data(self, planetary_data):
+        aura = eve.Aura.create_for_public()
+        zeroed_colony_data = {
+            'refined_commodities': []
+        }
+        raw_resources = []
+        for schematic in planetary_data['schematics']:
+            schematic_name = aura.get_schematic_name(schematic['schematic_id'])
+            refined_commodity = RefinedCommodity.create_with_name(schematic_name)
+            if refined_commodity is None:
+                continue
+
+            refined_commodity_data = {
+                'refined_commodity_id': refined_commodity.id,
+                'colony_id': self.id,
+                'quantity': planetary_data['storages'].get(refined_commodity.type_id, 0),
+                'processed_materials': [
+                    {
+                        'processed_material_id': refined_commodity.first_input.id,
+                        'colony_id': self.id,
+                        'quantity': planetary_data['storages'].get(refined_commodity.first_input.type_id, 0),
+                        'raw_resource': {'colony_id': self.id, 'raw_resource_id': refined_commodity.first_input.input.id, 'quantity': planetary_data['storages'].get(refined_commodity.first_input.input.type_id, 0)}
+                    },
+                    {
+                        'processed_material_id': refined_commodity.second_input.id,
+                        'colony_id': self.id,
+                        'quantity': planetary_data['storages'].get(refined_commodity.second_input.type_id, 0),
+                        'raw_resource': {'colony_id': self.id, 'raw_resource_id': refined_commodity.second_input.input.id, 'quantity': planetary_data['storages'].get(refined_commodity.second_input.input.type_id, 0)}
+                    }
+                ]
+            }
+            zeroed_colony_data['refined_commodities'].append(refined_commodity_data)
+        self.save_planetary_data(zeroed_colony_data)
+
+    def save_planetary_data(self, dict_data):
+        for refined_commodity_data in dict_data['refined_commodities']:
+            processed_material_data = refined_commodity_data.pop('processed_materials')
+            ColonyRefinedCommodity.create_or_update(refined_commodity_data)
+            for processed_material_data in processed_material_data:
+                raw_resource_data = processed_material_data.pop('raw_resource')
+                ColonyProcessedMaterial.create_or_update(processed_material_data)
+                ColonyRawResource.create_or_update(raw_resource_data)
+        self.__refined_commodities = None
+        self.__processed_materials = None
+        self.__raw_resources = None
 
     def update_me(self, dict_data):
         for refined_commodity_data in dict_data['refined_commodities']:

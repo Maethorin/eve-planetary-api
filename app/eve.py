@@ -72,7 +72,7 @@ class Aura(object):
                 'refresh_token': data['refresh_token'],
                 'access_token_expires': data['expires_in'],
             })
-
+            return
         raise exceptions.EVEAuthorizationFailed('Could not authorized EVE: {}'.format(sso_response.text))
 
     def get_account(self):
@@ -149,7 +149,7 @@ class Aura(object):
         if response.status_code == 200:
             return response.json()
         if response.status_code == 403:
-            token_data = self.refresh_token()
+            self.refresh_token()
             response = requests.get(url, headers=self.access_headers)
             if response.status_code == 200:
                 return response.json()
@@ -172,3 +172,8 @@ class Aura(object):
         url = '{}/universe/ids'.format(self.esi_url)
         types_data = self.__post_public_url(url, types_names)
         return types_data['inventory_types']
+
+    def get_schematic_name(self, schematic_id):
+        url = '{}/universe/schematics/{}'.format(self.esi_url, schematic_id)
+        schematic_data = self.__get_public_url(url)
+        return schematic_data['schematic_name']

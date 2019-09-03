@@ -28,6 +28,8 @@ class Config(object):
         self.SMTP_SERVER = os.environ['SECRET_KEY']
         self.EMAIL_LOGIN = os.environ['EMAIL_LOGIN']
         self.EMAIL_PASSWORD = os.environ['EMAIL_PASSWORD']
+        self.EVE_CLIENT_ID = os.environ['EVE_CLIENT_ID']
+        self.EVE_SECRET_KEY = os.environ['EVE_SECRET_KEY']
 
 
 class ProductionConfig(Config):

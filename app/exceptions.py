@@ -43,3 +43,11 @@ class ColonyProcessedMaterialNotFound(Exception):
 
 class ColonyRawResourceNotFound(Exception):
     pass
+
+
+class EVEAuthorizationFailed(Exception):
+    pass
+
+
+class EVEConnectionFailed(Exception):
+    pass

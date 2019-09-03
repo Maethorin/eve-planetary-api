@@ -8,7 +8,7 @@ psycopg2
 sqlalchemy-utils
 
 passlib
-PyJWT
+python-jose
 
 requests
 python-dotenv

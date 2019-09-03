@@ -5,16 +5,15 @@ from datetime import datetime, timedelta
 from flask import Flask, g, request
 from flask_sqlalchemy import SQLAlchemy
 
-from app import config as config_module, api, database, auth
+from app import config as config_module, api, database, auth, commands
 
 
 config = config_module.get_config()
 
 web_app = Flask(__name__)
 web_app.config.from_object(config)
-
 database.AppRepository.db = SQLAlchemy(web_app)
-
+commands.register(web_app)
 api.create_api(web_app)
 
 

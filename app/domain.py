@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 import random
 import string
+import time
 from datetime import timedelta, datetime
 
-import jwt
+from jose import jwt
 from passlib.apps import custom_app_context
 
-from app import repositories, exceptions, config as config_module, mr_postman
+from app import repositories, exceptions, config as config_module, mr_postman, eve
 
 config = config_module.get_config()
 
@@ -42,13 +43,6 @@ class Entity(object):
         if getattr(instance, 'id', None) is not None:
             self.id = instance.id
 
-    def __repr__(self):
-        return self.name
-
-    @property
-    def name(self):
-        return self.instance.name
-
     def save(self):
         self.instance.save_db()
 
@@ -62,8 +56,7 @@ class Entity(object):
 
     def as_dict(self, compact=False):
         return {
-            'id': self.id,
-            'name': self.name
+            'id': self.id
         }
 
 
@@ -124,6 +117,13 @@ class User(Entity):
         self.__teams = None
         self.__modules = None
 
+    def __repr__(self):
+        return self.name
+
+    @property
+    def name(self):
+        return self.instance.name
+
     @property
     def email(self):
         return self.instance.email
@@ -150,7 +150,7 @@ class User(Entity):
 
     def as_dict(self, compact=False):
         as_dict = super(User, self).as_dict()
-        as_dict['email'] = self.email
+        as_dict.update({'email': self.email, 'name': self.name})
         if compact:
             return as_dict
 
@@ -171,7 +171,11 @@ class User(Entity):
     def generate_auth_token(self, expiration=600):
         return jwt.encode({'id': self.id, 'email': self.email, 'exp': datetime.utcnow() + timedelta(minutes=expiration)}, config.SECRET_KEY, algorithm='HS256')
 
-    def get_item(self, **kwargs):
+    def create_account(self, account_data):
+        account_data['user_id'] = self.id
+        return Account.create_new(account_data)
+
+    def get_item(self, payload, **kwargs):
         if not self.is_admin:
             raise exceptions.WhoDaHellYouThinkYouAre('Not now!')
         if self.entity_key == 'raw_resource':
@@ -181,25 +185,27 @@ class User(Entity):
         if self.entity_key == 'refined_commodity':
             return self.__get_refined_commodity(kwargs['refined_commodity_id'])
         if self.entity_key == 'colony':
-            if self.resource_key == 'calculate':
-                return self.__calculate_colony_production_target(**kwargs)
-            return self.__get_colony(kwargs['colony_id'])
+            if payload.get('calculate') is not None:
+                return self.__calculate_account_character_colony_production_target(kwargs['account_id'], kwargs['character_id'], kwargs['colony_id'], production_target=payload.get('production_target'))
+            return self.__get_account_character_colony(kwargs['account_id'], kwargs['character_id'], kwargs['colony_id'])
         return None
 
     def get_list(self, payload, **kwargs):
         if not self.is_admin:
             raise exceptions.WhoDaHellYouThinkYouAre('Not now!')
         if self.entity_key == 'raw_resource':
-            return self.__get_raw_resources_list()
+            return self.__get_raw_resources()
         if self.entity_key == 'processed_material':
-            return self.__get_processed_materials_list()
+            return self.__get_processed_materials()
         if self.entity_key == 'refined_commodity':
-            return self.__get_refined_commodities_list()
+            return self.__get_refined_commodities()
         if self.entity_key == 'colony':
-            return self.__get_colonies_list(**kwargs)
+            return self.__get_account_character_colonies(**kwargs)
+        if self.entity_key == 'account':
+            return self.__get_accounts()
         return []
 
-    def create_new_entity(self, dict_data):
+    def create_new_entity(self, dict_data, **kwargs):
         if not self.is_admin:
             raise exceptions.WhoDaHellYouThinkYouAre('Not now!')
         if self.entity_key == 'raw_resource':
@@ -209,10 +215,21 @@ class User(Entity):
         if self.entity_key == 'refined_commodity':
             return self.__create_refined_commodity(dict_data)
         if self.entity_key == 'colony':
-            return self.__create_colony(dict_data)
+            return self.__create_account_character_colonies(kwargs['account_id'], kwargs['character_id'])
         return None
 
-    def __get_raw_resources_list(self):
+    def update_entity(self, dict_data, **kwargs):
+        if not self.is_admin:
+            raise exceptions.WhoDaHellYouThinkYouAre('Not now!')
+        if self.entity_key == 'raw_resource':
+            return self.__update_raw_resource(kwargs['raw_resource_id'], dict_data)
+        if self.entity_key == 'processed_material':
+            return self.__update_processed_material(kwargs['processed_material_id'], dict_data)
+        if self.entity_key == 'refined_commodity':
+            return self.__update_refined_commodity(kwargs['refined_commodity_id'], dict_data)
+        return None
+
+    def __get_raw_resources(self):
         return RawResource.list_all()
     
     def __get_raw_resource(self, raw_resource_id):
@@ -226,7 +243,7 @@ class User(Entity):
         raw_resource.update_me(dict_data)
         return raw_resource
 
-    def __get_processed_materials_list(self):
+    def __get_processed_materials(self):
         return ProcessedMaterial.list_all()
 
     def __get_processed_material(self, processed_material_id):
@@ -240,7 +257,7 @@ class User(Entity):
         processed_material.update_me(dict_data)
         return processed_material
 
-    def __get_refined_commodities_list(self):
+    def __get_refined_commodities(self):
         return RefinedCommodity.list_all()
 
     def __get_refined_commodity(self, refined_commodity_id):
@@ -254,27 +271,215 @@ class User(Entity):
         refined_commodity.update_me(dict_data)
         return refined_commodity
 
-    def __get_colonies_list(self, **kwargs):
-        if kwargs.get('system_name') is not None:
-            if kwargs.get('planet_name') is not None:
-                return Colony.list_for_system_planet(kwargs['system_name'], kwargs['planet_name'])
-            return Colony.list_for_system(kwargs['system_name'])
-        return Colony.list_all()
+    def __get_accounts(self):
+        return Account.list_user_accounts(self.id)
 
-    def __get_colony(self, colony_id):
-        return Colony.create_with_id(colony_id)
+    def __get_account(self, account_id):
+        return Account.create_with_user_and_id(self.id, account_id)
 
-    def __create_colony(self, dict_data):
-        return Colony.create_new(dict_data)
+    def __get_account_character_colonies(self, account_id, character_id):
+        account = self.__get_account(account_id)
+        character = account.get_character(character_id)
+        return character.colonies
 
-    def __update_colony(self, colony_id, dict_data):
-        colony = Colony.create_with_id(colony_id)
-        colony.update_me(dict_data)
-        return colony
+    def __get_account_character_colony(self, account_id, character_id, colony_id):
+        account = self.__get_account(account_id)
+        character = account.get_character(character_id)
+        return character.get_colony(colony_id)
 
-    def __calculate_colony_production_target(self, colony_id, production_target=None):
-        colony = self.__get_colony(colony_id)
+    def __create_account_character_colonies(self, account_id, character_id):
+        account = self.__get_account(account_id)
+        return account.create_character_colonies(character_id)
+
+    def __calculate_account_character_colony_production_target(self, account_id, character_id, colony_id, production_target=None):
+        colony = self.__get_account_character_colony(account_id, character_id, colony_id)
         return colony.calculate_raw_resources_extraction(production_target)
+
+
+class Account(Entity):
+    repository = repositories.Account
+
+    @classmethod
+    def list_user_accounts(cls, user_id):
+        return [cls(instance) for instance in cls.repository.list_with_filter(user_id=user_id)]
+
+    @classmethod
+    def create_with_user_and_id(cls, user_id, account_id):
+        return cls(cls.repository.get_with_filter(id=account_id, user_id=user_id))
+
+    @classmethod
+    def create_new(cls, dict_data):
+        aura = eve.Aura.create_for_auth(dict_data.pop('auth_code'))
+        account_info = aura.get_account()
+        account_info['access_token_expires'] = datetime.fromtimestamp(
+            time.time() + account_info['access_token_expires'],
+        )
+        dict_data.update(account_info)
+        account = super(Account, cls).create_new(dict_data)
+        account.create_new_character(aura.get_character(account_info['access_token']))
+        return account
+
+    def __init__(self, instance):
+        super(Account, self).__init__(instance)
+        self.__characters = None
+
+    def __repr__(self):
+        return self.username
+
+    @property
+    def username(self):
+        return self.instance.username
+
+    @property
+    def access_token(self):
+        return self.instance.access_token
+
+    @property
+    def refresh_token(self):
+        return self.instance.refresh_token
+
+    @property
+    def access_token_expires(self):
+        return self.instance.access_token_expires
+
+    @property
+    def characters(self):
+        if self.__characters is None:
+            self.__characters = [Character.create_with_account(instance, self) for instance in self.instance.characters]
+        return self.__characters
+
+    def get_character(self, character_id):
+        return [_character for _character in self.characters if _character.id == character_id][0]
+
+    def create_new_character(self, character_info):
+        character_info['account_id'] = self.id
+        Character.create_new(character_info)
+
+    def create_character_colonies(self, character_id):
+        character = self.get_character(character_id)
+        character.create_colonies_from_eve()
+        return character
+
+    def update_tokens(self, token_data):
+        token_data['access_token_expires'] = datetime.fromtimestamp(time.time() + token_data['access_token_expires'])
+        self.update_me(dict_data=token_data)
+
+    def as_dict(self, compact=False):
+        as_dict = super(Account, self).as_dict(compact)
+        as_dict.update({
+            'username': self.username,
+            'access_token_expires': self.access_token_expires.strftime('%Y-%m-%d %H:%M'),
+            'characters': [character.as_dict(compact) for character in self.characters]
+        })
+        return as_dict
+
+
+class Character(Entity):
+    repository = repositories.Character
+
+    @classmethod
+    def create_with_account(cls, instance, account):
+        return cls(instance, account)
+
+    def __init__(self, instance, account=None):
+        super(Character, self).__init__(instance)
+        self.__colonies = None
+        self.__account = account
+
+    def __repr__(self):
+        return self.name
+
+    @property
+    def name(self):
+        return self.instance.name
+
+    @property
+    def character_id(self):
+        return self.instance.character_id
+
+    @property
+    def account(self):
+        if self.__account is None:
+            self.__account = Account.create_with_instance(self.instance.account)
+        return self.__account
+
+    @property
+    def colonies(self):
+        if self.__colonies is None:
+            self.__colonies = [Colony.create_with_character(instance, self) for instance in self.instance.colonies]
+        return self.__colonies
+
+    def get_colony(self, colony_id):
+        return [colony for colony in self.colonies if colony.id == colony_id][0]
+
+    def create_colonies_from_eve(self):
+        aura = eve.Aura.create_with_character(self)
+        character_planets = {{'upgrade_level': 4, 'num_pins': 7, 'solar_system_id': 30005308, 'owner_id': 90832503, 'last_update': '2019-09-02T09:46:20Z', 'planet_type': 'oceanic', 'planet_id': 40335748}}
+        # for character_planet in aura.get_character_planets():
+        for character_planet in character_planets:
+            # solar_system = aura.get_solar_system(character_planet['solar_system_id'])
+            solar_system = {'system_id': 30005308, 'system_name': 'Jufvitte'}
+            # planet = aura.get_planet(character_planet['planet_id'])
+            planet = {'planet_name': 'Jufvitte IX', 'planet_id': 40335748, 'planet_type_id': 2014}
+            # colony_data = aura.get_colony(character_planet['planet_id'])
+
+            colony_data = {
+                'pins': [
+                    {'latitude': 0.698319551306, 'contents': [{'amount': 4005, 'type_id': 2319}], 'longitude': 5.14793946887, 'pin_id': 1031275339546, 'type_id': 2542},
+                    {'latitude': 0.713551961614, 'longitude': 5.02560058358, 'pin_id': 1027825608864, 'type_id': 2525},
+                    {
+                        'extractor_details': {
+                            'product_type_id': 2268,
+                            'cycle_time': 1800,
+                            'heads': [
+                                {'latitude': 0.872196928005, 'longitude': 5.19956185029, 'head_id': 0},
+                                {'latitude': 0.870772395826, 'longitude': 5.16207878149, 'head_id': 1},
+                                {'latitude': 0.678887742845, 'longitude': 5.25793378853, 'head_id': 2},
+                                {'latitude': 0.831544067174, 'longitude': 5.19451271739, 'head_id': 3},
+                                {'latitude': 0.842302098815, 'longitude': 5.15228835616, 'head_id': 4},
+                                {'latitude': 0.808919036053, 'longitude': 5.15911908006, 'head_id': 5},
+                                {'latitude': 0.657428541077, 'longitude': 5.29748646519, 'head_id': 6},
+                                {'latitude': 0.7065854645, 'longitude': 5.22873677112, 'head_id': 7},
+                                {'latitude': 0.775435544216, 'longitude': 5.16910258904, 'head_id': 8},
+                                {'latitude': 0.745321706019, 'longitude': 5.18526295195, 'head_id': 9}
+                            ],
+                            'qty_per_cycle': 5200,
+                            'head_radius': 0.0136296823621
+                        }, 'latitude': 0.894761096558,
+                        'pin_id': 1027959862978,
+                        'expiry_time': '2019-09-03T16:46:20Z',
+                        'last_cycle_start': '2019-09-02T09:46:20Z',
+                        'longitude': 5.52693211772,
+                        'install_time': '2019-09-02T09:46:20Z',
+                        'type_id': 3063
+                    },
+                    {'latitude': 0.712387405109, 'contents': [{'amount': 305310, 'type_id': 2073}, {'amount': 349572, 'type_id': 2268}, {'amount': 1127, 'type_id': 2393}, {'amount': 405, 'type_id': 2319}], 'pin_id': 1027825706917, 'last_cycle_start': '2019-08-30T04:56:34Z', 'longitude': 5.15126936226, 'type_id': 2535},
+                    {'latitude': 0.712935975025, 'contents': [{'amount': 3000, 'type_id': 2073}], 'pin_id': 1027825706918, 'type_id': 2490, 'last_cycle_start': '2019-09-02T09:39:33Z', 'longitude': 5.13290451836, 'schematic_id': 131},
+                    {'latitude': 0.712018078817, 'contents': [{'amount': 3000, 'type_id': 2268}], 'pin_id': 1027825706919, 'type_id': 2490, 'last_cycle_start': '2019-09-02T09:19:37Z', 'longitude': 5.16993681213, 'schematic_id': 121},
+                    {'latitude': 0.724671672065, 'contents': [{'amount': 40, 'type_id': 2393}, {'amount': 20, 'type_id': 3645}], 'pin_id': 1027825706922, 'type_id': 2485, 'last_cycle_start': '2019-09-02T08:49:37Z', 'longitude': 5.15147699191, 'schematic_id': 86}
+                ]
+            }
+
+            colony_data.update({
+                'character_id': self.id,
+                'planet_type': character_planet['planet_type']
+            })
+            colony_data.update(planet)
+            colony_data.update(solar_system)
+            Colony.create_new(colony_data)
+
+    def as_dict(self, compact=False):
+        as_dict = super(Character, self).as_dict(compact)
+        as_dict.update({
+            'name': self.name
+        })
+        if compact:
+            return as_dict
+
+        as_dict.update({
+            'colonies': [colony.as_dict() for colony in self.colonies]
+        })
+        return as_dict
 
 
 class RawResource(Entity):
@@ -284,6 +489,9 @@ class RawResource(Entity):
         super(RawResource, self).__init__(instance)
         self.__processed_material = None
         self.__colonies = None
+
+    def __repr__(self):
+        return self.name
 
     @property
     def name(self):
@@ -301,6 +509,10 @@ class RawResource(Entity):
 
     def as_dict(self, compact=False):
         as_dict = super(RawResource, self).as_dict(compact)
+        as_dict.update({
+            'name': self.name,
+            'image_url': eve.Aura.get_type_image_url(self.instance.type_id, 64)
+        })
         if compact:
             return as_dict
         as_dict.update({
@@ -316,6 +528,9 @@ class ProcessedMaterial(Entity):
         super(ProcessedMaterial, self).__init__(instance)
         self.__input = None
         self.__colonies = None
+
+    def __repr__(self):
+        return self.name
 
     @property
     def name(self):
@@ -346,6 +561,8 @@ class ProcessedMaterial(Entity):
     def as_dict(self, compact=False):
         as_dict = super(ProcessedMaterial, self).as_dict(compact)
         as_dict.update({
+            'name': self.name,
+            'image_url': eve.Aura.get_type_image_url(self.instance.type_id, 64),
             'input': self.input.as_dict(compact=True),
             'input_quantity': self.input_quantity,
             'output_quantity': self.output_quantity,
@@ -361,6 +578,9 @@ class RefinedCommodity(Entity):
         self.__first_input = None
         self.__second_input = None
         self.__colonies = None
+
+    def __repr__(self):
+        return self.name
 
     @property
     def name(self):
@@ -397,6 +617,8 @@ class RefinedCommodity(Entity):
     def as_dict(self, compact=False):
         as_dict = super(RefinedCommodity, self).as_dict(compact)
         as_dict.update({
+            'name': self.name,
+            'image_url': eve.Aura.get_type_image_url(self.instance.type_id, 64),
             'first_input': self.first_input.as_dict(compact),
             'first_input_quantity': self.first_input_quantity,
             'second_input': self.second_input.as_dict(compact),
@@ -426,6 +648,10 @@ class ColonyRawResource(Entity):
     def quantity(self):
         return self.instance.quantity
 
+    def set_quantity(self, value):
+        self.instance.quantity = value
+        self.save()
+
     def as_dict(self, compact=False):
         as_dict = {
             'raw_resource': self.raw_resource.as_dict(compact),
@@ -453,6 +679,10 @@ class ColonyProcessedMaterial(Entity):
     @property
     def quantity(self):
         return self.instance.quantity
+
+    def set_quantity(self, value):
+        self.instance.quantity = value
+        self.save()
 
     def as_dict(self, compact=False):
         as_dict = {
@@ -482,6 +712,10 @@ class ColonyRefinedCommodity(Entity):
     def quantity(self):
         return self.instance.quantity
 
+    def set_quantity(self, value):
+        self.instance.quantity = value
+        self.save()
+
     def as_dict(self, compact=False):
         as_dict = {
             'refined_commodity': self.refined_commodity.as_dict(compact),
@@ -501,12 +735,20 @@ class Colony(Entity):
     def list_for_system_planet(cls, system_name, planet_name):
         return [cls(instance) for instance in cls.repository.find_for_system_planet(system_name, planet_name)]
 
-    def __init__(self, instance):
+    @classmethod
+    def create_with_character(cls, instance, character):
+        return cls(instance, character)
+
+    def __init__(self, instance, character=None):
         super(Colony, self).__init__(instance)
         self.__raw_resources = None
         self.__processed_materials = None
         self.__refined_commodities = None
         self.__calcule_result = None
+        self.__character = character
+
+    def __repr__(self):
+        return '{} {}'.format(self.system_name, self.planet_name)
 
     @property
     def system_name(self):
@@ -517,8 +759,14 @@ class Colony(Entity):
         return self.instance.planet_name
 
     @property
-    def player_name(self):
-        return self.instance.player_name
+    def planet_type(self):
+        return self.instance.planet_type
+
+    @property
+    def character(self):
+        if self.__character is None:
+            self.__character = Character.create_with_instance(self.instance.character)
+        return self.__character
 
     @property
     def raw_resources(self):
@@ -537,6 +785,16 @@ class Colony(Entity):
         if self.__refined_commodities is None:
             return [ColonyRefinedCommodity.create_with_instance(db_refined_commodities) for db_refined_commodities in self.instance.refined_commodities]
         return self.__refined_commodities
+
+    def update_me(self, dict_data):
+        for refined_commodity_data in dict_data['refined_commodities']:
+            colony_refined_commodity = [_colony_refined_commodity for _colony_refined_commodity in self.refined_commodities if _colony_refined_commodity.refined_commodity.id == refined_commodity_data['refined_commodity_id']][0]
+            colony_refined_commodity.set_quantity(refined_commodity_data['quantity'])
+            for processed_material_data in refined_commodity_data['processed_materials']:
+                colony_processed_material = [_colony_processed_material for _colony_processed_material in self.processed_materials if _colony_processed_material.processed_material.id == processed_material_data['processed_material_id']][0]
+                colony_processed_material.set_quantity(processed_material_data['quantity'])
+                colony_raw_resource = [_colony_raw_resource for _colony_raw_resource in self.raw_resources if _colony_raw_resource.raw_resource.id == processed_material_data['raw_resource']['raw_resource_id']][0]
+                colony_raw_resource.set_quantity(processed_material_data['raw_resource']['quantity'])
 
     def select_raw_resource_material(self, colony_raw_resource):
         for colony_processed_material in self.processed_materials:
@@ -575,6 +833,8 @@ class Colony(Entity):
     def calculate_raw_resources_extraction(self, production_target=None):
         if production_target is None:
             production_target = max(self.__total_processed_materials_in_colony())
+        else:
+            production_target = int(production_target)
         self.__calcule_result = {
             'calcule_result': [],
             'production_target': production_target
@@ -620,8 +880,7 @@ class Colony(Entity):
         as_dict = {
             'id': self.id,
             'system_name': self.system_name,
-            'planet_name': self.planet_name,
-            'player_name': self.player_name
+            'planet_name': self.planet_name
         }
         if compact:
             return as_dict

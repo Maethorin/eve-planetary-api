@@ -111,7 +111,7 @@ class ResourceBase(Resource):
 
     def get_item(self, **kwargs):
         try:
-            return self.response(self.me.get_item(**kwargs).as_dict())
+            return self.response(self.me.get_item(self.payload, **kwargs).as_dict())
         except exceptions.EntityNotExist:
             return "Item doesn't exist", 404
         except Exception as ex:
@@ -169,7 +169,7 @@ class ResourceBase(Resource):
                     'uploading': True,
                     'file_attached': file_attached
                 }
-            updated = self.me.update(payload, **kwargs)
+            updated = self.me.update_entity(payload, **kwargs)
             if updated:
                 return self.response(updated.as_dict()), 200
             return self.response({'result': 'ERROR'}), 500
@@ -239,6 +239,32 @@ class AdminResource(ResourceBase):
             return self.return_unexpected_error(ex)
 
 
+class AdminAccount(ResourceBase):
+    http_methods_allowed = ['GET', 'POST']
+    entity_key = 'account'
+    resource_key = 'account'
+
+    @login_required
+    def post(self):
+        try:
+            account = self.me.create_account(self.payload)
+            return self.response(account.as_dict(compact=True))
+        except Exception as ex:
+            return self.return_unexpected_error(ex)
+
+
+class AdminAccountCharacterColony(ResourceBase):
+    http_methods_allowed = ['GET', 'POST', 'PUT', 'DELETE']
+    entity_key = 'colony'
+    resource_key = 'colony'
+
+
+class ColonyCalculateResource(ResourceBase):
+    http_methods_allowed = ['GET']
+    entity_key = 'colony'
+    resource_key = 'calculate'
+
+
 class AdminConfirmResource(ResourceBase):
     http_methods_allowed = ['GET', 'PUT']
 
@@ -289,30 +315,6 @@ class RefinedCommodityResource(ResourceBase):
     http_methods_allowed = ['GET', 'POST', 'PUT', 'DELETE']
     entity_key = 'refined_commodity'
     resource_key = 'refined_commodity'
-
-
-class ColonyResource(ResourceBase):
-    http_methods_allowed = ['GET', 'POST', 'PUT', 'DELETE']
-    entity_key = 'colony'
-    resource_key = 'colony'
-
-
-class SystemColonyResource(ResourceBase):
-    http_methods_allowed = ['GET', 'POST', 'PUT', 'DELETE']
-    entity_key = 'colony'
-    resource_key = 'colony'
-
-
-class SystemPlanetColonyResource(ResourceBase):
-    http_methods_allowed = ['GET', 'POST', 'PUT', 'DELETE']
-    entity_key = 'colony'
-    resource_key = 'colony'
-
-
-class ColonyCalculateResource(ResourceBase):
-    http_methods_allowed = ['GET']
-    entity_key = 'colony'
-    resource_key = 'calculate'
 
 
 class HealthcheckResource(Resource):

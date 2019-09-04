@@ -433,7 +433,7 @@ class Character(Entity):
                 if 'extractor_details' in pin:
                     continue
                 if 'schematic_id' in pin:
-                    planetary_data['schematics'].append({'contents': pin['contents'], 'type_id': pin['type_id'], 'schematic_id': pin['schematic_id']})
+                    planetary_data['schematics'].append({'type_id': pin['type_id'], 'schematic_id': pin['schematic_id']})
                     continue
                 if 'contents' in pin:
                     for content in pin['contents']:

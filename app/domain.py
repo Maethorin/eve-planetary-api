@@ -111,11 +111,7 @@ class User(Entity):
         self.temp_password = None
         self.entity_key = None
         self.resource_key = None
-        self.__kanbans = None
-        self.__sprints = None
-        self.__planned_sprints = None
-        self.__teams = None
-        self.__modules = None
+        self.__accounts = None
 
     def __repr__(self):
         return self.name
@@ -148,6 +144,12 @@ class User(Entity):
     def is_correct(self):
         return custom_app_context.verify(self.temp_password, self.password_hash)
 
+    @property
+    def accounts(self):
+        if self.__accounts is None:
+            self.__accounts = [Account.create_with_instance(instance) for instance in self.instance.accounts]
+        return self.__accounts
+
     def as_dict(self, compact=False):
         as_dict = super(User, self).as_dict()
         as_dict.update({'email': self.email, 'name': self.name})
@@ -155,7 +157,8 @@ class User(Entity):
             return as_dict
 
         as_dict.update({
-            'is_admin': self.is_admin
+            'is_admin': self.is_admin,
+            'accounts': [account.as_dict(compact=True) for account in self.accounts]
         })
         return as_dict
 
@@ -487,6 +490,10 @@ class RawResource(Entity):
         return self.instance.type_id
 
     @property
+    def image_url(self):
+        return eve.Aura.get_type_image_url(self.type_id, 64)
+
+    @property
     def processed_material(self):
         if self.__processed_material is None:
             self.__processed_material = ProcessedMaterial.create_with_instance(self.instance.processed_material)
@@ -500,7 +507,7 @@ class RawResource(Entity):
         as_dict = super(RawResource, self).as_dict(compact)
         as_dict.update({
             'name': self.name,
-            'image_url': eve.Aura.get_type_image_url(self.instance.type_id, 64)
+            'image_url': self.image_url
         })
         if compact:
             return as_dict
@@ -544,6 +551,10 @@ class ProcessedMaterial(Entity):
         return self.instance.type_id
 
     @property
+    def image_url(self):
+        return eve.Aura.get_type_image_url(self.type_id, 64)
+
+    @property
     def input_id(self):
         return self.instance.input_id
 
@@ -569,7 +580,7 @@ class ProcessedMaterial(Entity):
         as_dict = super(ProcessedMaterial, self).as_dict(compact)
         as_dict.update({
             'name': self.name,
-            'image_url': eve.Aura.get_type_image_url(self.instance.type_id, 64),
+            'image_url': self.image_url,
             'input': self.input.as_dict(compact=True),
             'input_quantity': self.input_quantity,
             'output_quantity': self.output_quantity,
@@ -612,6 +623,10 @@ class RefinedCommodity(Entity):
         return self.instance.type_id
 
     @property
+    def image_url(self):
+        return eve.Aura.get_type_image_url(self.type_id, 64)
+
+    @property
     def first_input(self):
         if self.__first_input is None:
             self.__first_input = ProcessedMaterial.create_with_id(self.instance.first_input_id)
@@ -643,7 +658,7 @@ class RefinedCommodity(Entity):
         as_dict = super(RefinedCommodity, self).as_dict(compact)
         as_dict.update({
             'name': self.name,
-            'image_url': eve.Aura.get_type_image_url(self.instance.type_id, 64),
+            'image_url': self.image_url,
             'first_input': self.first_input.as_dict(compact),
             'first_input_quantity': self.first_input_quantity,
             'second_input': self.second_input.as_dict(compact),
@@ -959,8 +974,10 @@ class Colony(Entity):
                 'processed_material_id': colony_processed_material.processed_material.id,
                 'name': colony_processed_material.processed_material.name,
                 'quantity': colony_processed_material.quantity,
+                'image_url': colony_processed_material.processed_material.image_url,
                 'raw_resource': {
                     'raw_resource_id': colony_raw_processed.raw_resource.id,
+                    'image_url': colony_raw_processed.raw_resource.image_url,
                     'name': colony_raw_processed.raw_resource.name,
                     'quantity': colony_raw_processed.quantity,
                 }
@@ -973,6 +990,7 @@ class Colony(Entity):
             result.append({
                 'refined_commodity_id': colony_refined_commodity.refined_commodity.id,
                 'name': colony_refined_commodity.refined_commodity.name,
+                'image_url': colony_refined_commodity.refined_commodity.image_url,
                 'quantity': colony_refined_commodity.quantity,
                 'processed_materials': self.list_processed_materials()
             })

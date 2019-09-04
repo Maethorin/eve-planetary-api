@@ -205,7 +205,7 @@ class LoginResource(ResourceBase):
             if not user.confirmed:
                 return {'result': 'Forbidden'}, 403
             if user.is_correct:
-                g.user = user.as_dict()
+                g.user = user.as_dict(compact=True)
                 g.current_token = user.generate_auth_token()
                 return {'logged': True}, 200
         except Exception as ex:

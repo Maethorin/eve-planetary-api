@@ -15,6 +15,7 @@ class Aura(object):
     login_url = 'https://{}'.format(issuer)
     esi_url = 'https://esi.evetech.net/latest'
     image_url = 'https://imageserver.eveonline.com/Type/{type_id}_{width}.png'
+    character_portrat_url = 'https://imageserver.eveonline.com/Character/{character_id}_{width}.jpg'
 
     @classmethod
     def create_for_public(cls):
@@ -31,6 +32,10 @@ class Aura(object):
     @classmethod
     def get_type_image_url(cls, type_id, width):
         return cls.image_url.format(**{'type_id': type_id, 'width': width})
+
+    @classmethod
+    def get_character_portrat(cls, character_id, width):
+        return cls.character_portrat_url.format(**{'character_id': character_id, 'width': width})
 
     def __init__(self, character=None, auth_code=None):
         self.character = character

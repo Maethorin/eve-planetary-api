@@ -401,6 +401,10 @@ class Character(Entity):
         return self.instance.character_id
 
     @property
+    def portrait_url(self):
+        return eve.Aura.get_character_portrat(self.instance.character_id, 256)
+
+    @property
     def account(self):
         if self.__account is None:
             self.__account = Account.create_with_instance(self.instance.account)
@@ -445,7 +449,8 @@ class Character(Entity):
     def as_dict(self, compact=False):
         as_dict = super(Character, self).as_dict(compact)
         as_dict.update({
-            'name': self.name
+            'name': self.name,
+            'portrait_url': self.portrait_url
         })
         if compact:
             return as_dict

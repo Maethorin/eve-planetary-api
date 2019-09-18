@@ -9,7 +9,9 @@ config = config_module.get_config()
 db = database.AppRepository.db
 
 
-class AbstractModel(object):
+class AbstractModel(db.Model):
+    __abstract__ = True
+
     class NotExist(Exception):
         pass
 
@@ -75,7 +77,7 @@ class AbstractModel(object):
             setattr(self, key, json_data.get(key, getattr(self, key)))
 
 
-class User(db.Model, AbstractModel):
+class User(AbstractModel):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String, unique=True, nullable=False)
@@ -90,7 +92,7 @@ class User(db.Model, AbstractModel):
         return cls.get_with_filter(email=email)
 
 
-class Account(db.Model, AbstractModel):
+class Account(AbstractModel):
     __tablename__ = 'accounts'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -101,7 +103,7 @@ class Account(db.Model, AbstractModel):
     access_token_expires = db.Column(db.DateTime)
 
 
-class Character(db.Model, AbstractModel):
+class Character(AbstractModel):
     __tablename__ = 'characters'
     id = db.Column(db.Integer, primary_key=True)
     character_id = db.Column(db.BigInteger)
@@ -110,8 +112,11 @@ class Character(db.Model, AbstractModel):
     name = db.Column(db.String, nullable=False)
     owner_hash = db.Column(db.String)
 
+    def get_colonies(self):
+        return self.colonies.filter_by(deleted=False).all()
 
-class RawResource(db.Model, AbstractModel):
+
+class RawResource(AbstractModel):
     __tablename__ = 'raw_resources'
     id = db.Column(db.Integer, primary_key=True)
     type_id = db.Column(db.Integer)
@@ -119,7 +124,7 @@ class RawResource(db.Model, AbstractModel):
     colonies = db.relationship("ColonyRawResource", back_populates='raw_resource')
 
 
-class ProcessedMaterial(db.Model, AbstractModel):
+class ProcessedMaterial(AbstractModel):
     __tablename__ = 'processed_materials'
     id = db.Column(db.Integer, primary_key=True)
     type_id = db.Column(db.Integer)
@@ -131,7 +136,7 @@ class ProcessedMaterial(db.Model, AbstractModel):
     colonies = db.relationship("ColonyProcessedMaterial", back_populates='processed_material')
 
 
-class RefinedCommodity(db.Model, AbstractModel):
+class RefinedCommodity(AbstractModel):
     __tablename__ = 'refined_commodities'
     id = db.Column(db.Integer, primary_key=True)
     type_id = db.Column(db.Integer)
@@ -146,7 +151,7 @@ class RefinedCommodity(db.Model, AbstractModel):
     colonies = db.relationship("ColonyRefinedCommodity", back_populates='refined_commodity')
 
 
-class Colony(db.Model, AbstractModel):
+class Colony(AbstractModel):
     __tablename__ = 'colonies'
     id = db.Column(db.Integer, primary_key=True)
     system_id = db.Column(db.Integer, nullable=False)
@@ -158,11 +163,13 @@ class Colony(db.Model, AbstractModel):
     planet_type_id = db.Column(db.Integer, nullable=False)
 
     character_id = db.Column(db.Integer, db.ForeignKey('characters.id'), nullable=False)
-    character = db.relationship("Character", backref=backref("colonies"))
+    character = db.relationship("Character", backref=backref("colonies", lazy='dynamic'))
 
     raw_resources = db.relationship("ColonyRawResource", back_populates='colony')
     processed_materials = db.relationship("ColonyProcessedMaterial", back_populates='colony')
     refined_commodities = db.relationship("ColonyRefinedCommodity", back_populates='colony')
+
+    deleted = db.Column(db.Boolean, default=False, server_default='FALSE')
 
     @classmethod
     def find_for_system(cls, system_name):
@@ -173,7 +180,7 @@ class Colony(db.Model, AbstractModel):
         return cls.list_with_filter(system_name=system_name, planet_name=planet_name)
 
 
-class ColonyRawResource(db.Model, AbstractModel):
+class ColonyRawResource(AbstractModel):
     __tablename__ = 'colonies_raw_resources'
     raw_resource_id = db.Column(db.Integer, db.ForeignKey('raw_resources.id'), primary_key=True)
     raw_resource = db.relationship("RawResource", back_populates='colonies')
@@ -182,9 +189,10 @@ class ColonyRawResource(db.Model, AbstractModel):
     colony = db.relationship("Colony", back_populates='raw_resources')
 
     quantity = db.Column(db.Integer, nullable=False, default=0)
+    deleted = db.Column(db.Boolean, default=False, server_default='FALSE')
 
 
-class ColonyProcessedMaterial(db.Model, AbstractModel):
+class ColonyProcessedMaterial(AbstractModel):
     __tablename__ = 'colonies_processed_materials'
     processed_material_id = db.Column(db.Integer, db.ForeignKey('processed_materials.id'), primary_key=True)
     processed_material = db.relationship("ProcessedMaterial", back_populates='colonies')
@@ -193,9 +201,10 @@ class ColonyProcessedMaterial(db.Model, AbstractModel):
     colony = db.relationship("Colony", back_populates='processed_materials')
 
     quantity = db.Column(db.Integer, nullable=False, default=0)
+    deleted = db.Column(db.Boolean, default=False, server_default='FALSE')
 
 
-class ColonyRefinedCommodity(db.Model, AbstractModel):
+class ColonyRefinedCommodity(AbstractModel):
     __tablename__ = 'colonies_refined_commodities'
     refined_commodity_id = db.Column(db.Integer, db.ForeignKey('refined_commodities.id'), primary_key=True)
     refined_commodity = db.relationship("RefinedCommodity", back_populates='colonies')
@@ -204,3 +213,4 @@ class ColonyRefinedCommodity(db.Model, AbstractModel):
     colony = db.relationship("Colony", back_populates='refined_commodities')
 
     quantity = db.Column(db.Integer, nullable=False, default=0)
+    deleted = db.Column(db.Boolean, default=False, server_default='FALSE')

@@ -185,7 +185,7 @@ class ResourceBase(Resource):
         if 'DELETE' not in self.http_methods_allowed:
             return self.return_not_allowed()
         try:
-            self.me.delete(**kwargs)
+            self.me.delete_entity(**kwargs)
             return {'resultado': 'OK'}, 204
         except exceptions.CouldNotDelete as ex:
             return self.response({'erro': 'Could not Delete', 'internal_code': str(ex)}), 400

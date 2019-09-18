@@ -54,6 +54,10 @@ class Entity(object):
     def update_me(self, dict_data):
         self.instance.update_from_json(dict_data)
 
+    def delete_me(self):
+        self.instance.deleted = True
+        self.save()
+
     def as_dict(self, compact=False):
         return {
             'id': self.id
@@ -232,6 +236,12 @@ class User(Entity):
             return self.__update_refined_commodity(kwargs['refined_commodity_id'], dict_data)
         return None
 
+    def delete_entity(self, **kwargs):
+        if not self.is_admin:
+            raise exceptions.WhoDaHellYouThinkYouAre('Not now!')
+        if self.entity_key == 'colony':
+            self.__delete_account_character_colony(kwargs['account_id'], kwargs['character_id'], kwargs['colony_id'])
+
     def __get_raw_resources(self):
         return RawResource.list_all()
     
@@ -293,6 +303,10 @@ class User(Entity):
     def __create_account_character_colonies(self, account_id, character_id):
         account = self.__get_account(account_id)
         return account.create_character_colonies(character_id)
+
+    def __delete_account_character_colony(self, account_id, character_id, colony_id):
+        account = self.__get_account(account_id)
+        return account.delete_character_colony(character_id, colony_id)
 
     def __calculate_account_character_colony_production_target(self, account_id, character_id, colony_id, production_target=None):
         colony = self.__get_account_character_colony(account_id, character_id, colony_id)
@@ -363,6 +377,10 @@ class Account(Entity):
         character.create_colonies_from_eve()
         return character
 
+    def delete_character_colony(self, character_id, colony_id):
+        character = self.get_character(character_id)
+        character.delete_colony(colony_id)
+
     def update_tokens(self, token_data):
         token_data['access_token_expires'] = datetime.fromtimestamp(time.time() + token_data['access_token_expires'])
         self.update_me(dict_data=token_data)
@@ -413,7 +431,7 @@ class Character(Entity):
     @property
     def colonies(self):
         if self.__colonies is None:
-            self.__colonies = [Colony.create_with_character(instance, self) for instance in self.instance.colonies]
+            self.__colonies = [Colony.create_with_character(instance, self) for instance in self.instance.get_colonies()]
         return self.__colonies
 
     def get_colony(self, colony_id):
@@ -445,6 +463,10 @@ class Character(Entity):
                             planetary_data['storages'][content['type_id']] = 0
                         planetary_data['storages'][content['type_id']] += content['amount']
             colony.add_planetary_data(planetary_data)
+
+    def delete_colony(self, colony_id):
+        colony = self.get_colony(colony_id)
+        colony.delete_me()
 
     def as_dict(self, compact=False):
         as_dict = super(Character, self).as_dict(compact)
@@ -1000,6 +1022,15 @@ class Colony(Entity):
                 'processed_materials': self.list_processed_materials()
             })
         return result
+
+    def delete_me(self):
+        for colony_refined_commodity in self.refined_commodities:
+            colony_refined_commodity.delete_me()
+        for colony_processed_material in self.processed_materials:
+            colony_processed_material.delete_me()
+        for colony_raw_resource in self.raw_resources:
+            colony_raw_resource.delete_me()
+        super(Colony, self).delete_me()
 
     def as_dict(self, compact=False):
         as_dict = {

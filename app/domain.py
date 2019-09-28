@@ -102,12 +102,17 @@ class User(Entity):
         password_hash = custom_app_context.encrypt(password)
         dict_data['password_hash'] = password_hash
         dict_data['validate_token'] = cls.create_validate_token()
+        dict_data['confirmed'] = True
+        dict_data['is_admin'] = True
         user = super(User, cls).create_new(dict_data)
-        token_url = "{}/#!/me/confirm/{}".format(config.APP_URL, user.validate_token)
-        if config.DEVELOPMENT:
-            print('\nVALIDA AE DESENVOLVEDOR\n{}\n'.format(token_url))
-        else:
-            mr_postman.MrPostman.send_confirm_mail(user.email, token_url)
+        try:
+            token_url = "{}/#!/me/confirm/{}".format(config.APP_URL, user.validate_token)
+            if config.DEVELOPMENT:
+                print('\nVALIDA AE DESENVOLVEDOR\n{}\n'.format(token_url))
+            else:
+                mr_postman.MrPostman.send_confirm_mail(user.email, token_url)
+        except:
+            pass
         return user
 
     def __init__(self, instance):
